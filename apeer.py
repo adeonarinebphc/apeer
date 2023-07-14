@@ -272,12 +272,12 @@ def ShowBinaryMap(beltlist, mapfile, json_data, backcolor, forecolor):
 def ShowClustersOnMap(tmode, datatable, numclust, tfile, json_data):
 
 	# make filenames
-	bpath = "data"
+	#bpath = "data"
 	pcafile = tfile + ".pca.pdf"
-	kfile = bpath + "//" + tfile + ".kmeans.pca.pdf"
-	cluster_file = bpath + "//" + tfile + ".kmeans.pca.clusters.pdf"
-	cluster_tsv = bpath + "//" + tfile + "." + str(numclust) + ".cluster.tsv"
-	mapfile = bpath + "//" + tfile + ".map.png"
+	kfile = tfile + ".kmeans.pca.pdf"
+	cluster_file = tfile + ".kmeans.pca.clusters.pdf"
+	cluster_tsv = tfile + "." + str(numclust) + ".cluster.tsv"
+	mapfile = tfile + ".map.png"
 	
 	# PCA
 	datatable = datatable.replace(np.nan, 0)
@@ -578,8 +578,7 @@ def PlotMultiMaps(datalist, tmode, basedata, tbase, json_data):
 #removecols = ['State', 'EPA Region', 'County', 'FIPS']
 popdata = GetPopData()
 
-#chemdata = LoadPollutionData()
-#ShowCorrelations(chemdata, "chemical_cluster.jpg")
+chemdata = LoadPollutionData()
 
 # now get county data
 ofile = "2018_Toxics_Ambient_Concentrations.tract.tsv"
@@ -605,7 +604,7 @@ lowclust = 2
 hiclust = 5
 
 for x in range(lowclust, hiclust):	
-	ShowClustersOnMap("tract", chemtract, x, "apeer_tract." + ttag + "." + str(x) + ".pdf", tract_json)
-	ShowClustersOnMap("county", chemcounty, x, "apeer_county." + ttag + "." + str(x) + ".pdf", county_json)
+	ShowClustersOnMap("tract", chemtract, x, "apeer_tract." + str(x) + ".pdf", tract_json)
+	ShowClustersOnMap("county", chemcounty, x, "apeer_county." + str(x) + ".pdf", county_json)
 
 
