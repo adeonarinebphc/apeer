@@ -6,13 +6,13 @@ By: Andrew D
 
 # STEP 1: 
 - you will need to download the following libraries:
-seaborn
-pandas
-sklearn
-matplotlib
-numpy
-descartes
-openpyxl
+- seaborn
+- pandas
+- sklearn
+- matplotlib
+- numpy
+- descartes
+- openpyxl
 
 # STEP 2: 
 - download AirToxScreen data (2018) from the EPA website, and save it as a tsv "2018_Toxics_Ambient_Concentrations.tract.tsv"
