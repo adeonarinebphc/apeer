@@ -143,7 +143,6 @@ def RunPCA(pcadata, tfile, ttitle):
 	#plt.close()
 	
 	# print loadings
-	# https://scentellegher.github.io/machine-learning/2020/01/27/pca-loadings-sklearn.html
 	#loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
 	#loading_matrix = pd.DataFrame(loadings, columns=['PC1', 'PC2'], index=pcadata.columns)
 	#print(loading_matrix)
@@ -556,28 +555,21 @@ def PlotMultiMaps(datalist, tmode, basedata, tbase, json_data):
 #openpyxl
 
 # STEP 2: download AirToxScreen data (2018) from the EPA website, and save it as a tsv 
-#"2018_Toxics_Ambient_Concentrations.tract.tsv"
+# "2018_Toxics_Ambient_Concentrations.tract.tsv"
+# Download the file from here: https://drive.google.com/file/d/1IAwhEqD-DuBShfXH3Q1uUcY2y2bckTr2/view?usp=share_link
 
 # STEP 3: download EJSCREEN data (https://www.epa.gov/ejscreen/download-ejscreen-data) 
-#and calculate the population at the tract level, saving the file as 
-#"EJSCREEN_2021_USPR_Tracts.csv" (2nd column = FIPS code, 3rd column = population)
+# and calculate the population at the tract level, saving the file as 
+# "EJSCREEN_2021_USPR_Tracts.csv" (2nd column = FIPS code, 3rd column = population)
+# Download the file from here: https://drive.google.com/file/d/1H4bod9ZcS7XjV5tV5kZVfZiwk6Cj4YfD/view?usp=sharing
 
-# STEP 4: create an output directory "data" in the same directory as the apeer.py script
-
-# STEP 5: now run the script using the command:
-#python3 apeer.py
+# STEP 4: now run the script using the command:
+# python3 apeer.py
 
 ####################
 ### Main Program ###
 ####################
-
-# https://www.epa.gov/AirToxScreen/2018-airtoxscreen-assessment-results#emissions
-#tfile = "nata2014v2_national_cancerrisk_by_tract_poll-5.xlsx"
-#tfile = "2018_Toxics_Ambient_Concentrations.xlsx"
-#removecols = ['State', 'EPA Region', 'County', 'FIPS', 'Population', 'Total Cancer Risk (per million)']
-#removecols = ['State', 'EPA Region', 'County', 'FIPS']
 popdata = GetPopData()
-
 chemdata = LoadPollutionData()
 
 # now get county data
@@ -603,8 +595,16 @@ tract_json = LoadMapJSON("tract")
 lowclust = 2
 hiclust = 5
 
-for x in range(lowclust, hiclust):	
-	ShowClustersOnMap("tract", chemtract, x, "apeer_tract." + str(x) + ".pdf", tract_json)
-	ShowClustersOnMap("county", chemcounty, x, "apeer_county." + str(x) + ".pdf", county_json)
+for numclust in range(lowclust, hiclust):
+
+	# Make a census-tract level map using the ShowClustersOnMap function - maps are saved in PNG format
+	# parameter 1: mode (tract/cluster)
+	# parameter 2: pollution data (pandas dataframe)
+	# parameter 3: filename
+	# parameter 4: json map data
+	ShowClustersOnMap("tract", chemtract, numclust, "apeer_tract." + str(x), tract_json)
+
+	# Make a county-level map using the ShowClustersOnMap function
+	ShowClustersOnMap("county", chemcounty, numclust, "apeer_county." + str(x), county_json)
 
 
