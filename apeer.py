@@ -11,31 +11,427 @@ from collections import defaultdict
 import csv
 import openpyxl
 import os
+import scipy.stats as stats
 
 import matplotlib
 matplotlib.use("Agg")
 
-def FindMissingCols():
+def GetMainLists():
 
-	# for some reason, counties only has 173 columns compared to the full list of 177
-	# from tract data. missing Columns are:
-	# ['1_BROMOPROPANE', '1_1_DIMETHYLHYDRAZINE', '1_1_2_TRICHLOROETHANE', '1_1_2_2_TETRACHLOROETHANE']
-	cfile = "2018_Toxics_Ambient_Concentrations.county.tsv"
-	chemdata_county = pd.read_csv(cfile, header=0, index_col=0, sep="\t")
-	print(chemdata_county.columns)
+	# print out CDC PLACES counties / tracts
+	countylist = LoadPLACES("county")
+	tractlist = LoadPLACES("tract")
+	epacounties = LoadEPAData("county")
+	epatracts = LoadEPAData("tract")
+	chemdata_county = LoadChemicalData("county")
+	chemdata_tract = LoadChemicalData("tract")
+	master_counties = defaultdict(str)
+	master_tracts = defaultdict(str)
 
-	cfile = "2018_Toxics_Ambient_Concentrations.tract.tsv"
-	chemdata_tract = pd.read_csv(cfile, header=0, index_col=0, sep="\t")
-	print(chemdata_tract.columns)
+	tcnt1 = 1
+	hcountylist = defaultdict(str)
+	for tcounty in countylist.index:
+		#print(str(tcnt) + "\t" + tcounty)
+		hcountylist[tcounty] = ""
+	for tcounty in hcountylist:
+		master_counties[tcounty] = ""
+		tcnt1 += 1
+	print("Number of CDC counties: " + str(tcnt1))
 
-	missing_cols = []
-	for x in range(0, len(chemdata_tract.columns)):
-		tcol = chemdata_tract.columns[x]
-		if tcol not in chemdata_county.columns:
-			print("Missing column: " + tcol)
-	missing_cols.append(tcol)
+	tcnt2 = 1
+	htractlist = defaultdict(str)
+	for ttract in tractlist.index:
+		#print(str(tcnt) + "\t" + ttract)
+		htractlist[ttract] = ""
+	for ttract in htractlist:
+		master_tracts[ttract] = ""
+		tcnt2 += 1
+	print("Number of CDC counties: " + str(tcnt2))
 
-	return missing_cols
+	# EPA EJScreen
+	ecnt1 = 1
+	hcountylist2 = defaultdict(str)
+	for tcounty in epacounties.index:
+		#print(str(tcnt) + "\t" + tcounty)
+		hcountylist2[tcounty] = ""
+	for tcounty in hcountylist2:
+		master_counties[tcounty] = ""
+		ecnt1 += 1
+	print("Number of EPA counties: " + str(ecnt1))
+
+	ecnt2 = 1
+	htractlist2 = defaultdict(str)
+	for ttract in epatracts.index:
+		#print(str(tcnt) + "\t" + tcounty)
+		htractlist2[ttract] = ""
+	for ttract in htractlist2:
+		master_tracts[ttract] = ""
+		ecnt2 += 1
+	print("Number of EPA tracts: " + str(ecnt2))
+	
+	# EPA EJScreen
+	ccnt1 = 1
+	hcountylist3 = defaultdict(str)
+	for tcounty in chemdata_county.index:
+		#print(str(tcnt) + "\t" + tcounty)
+		hcountylist3[tcounty] = ""
+	for tcounty in hcountylist3:
+		master_counties[tcounty] = ""
+		ccnt1 += 1
+	print("Number of Chem counties: " + str(ccnt1))
+
+	ccnt2 = 1
+	htractlist3 = defaultdict(str)
+	for ttract in chemdata_tract.index:
+		#print(str(tcnt) + "\t" + tcounty)
+		htractlist3[ttract] = ""
+	for ttract in htractlist3:
+		master_tracts[ttract] = ""
+		ccnt2 += 1
+	print("Number of Chem tracts: " + str(ccnt2))
+	
+	# get intersections
+	mcounty = 0
+	mtract = 0
+	finalcounties = []
+	finaltracts = []
+	for tcounty in master_counties:
+		if (tcounty in hcountylist) and (tcounty in hcountylist2) and (tcounty in hcountylist3):
+			finalcounties.append(tcounty)
+			if len(tcounty.strip()) != 5:
+				print("County Potential Error: " + tcounty)
+			mcounty += 1
+	for ttract in master_tracts:
+		if (ttract in htractlist) and (ttract in htractlist2) and (ttract in htractlist3):
+			finaltracts.append(ttract)
+			if len(ttract.strip()) != 11:
+				print("Tract Potential Error: " + ttract)
+			mtract += 1
+	print("Number of common counties: " + str(mcounty))
+	print("Number of common tracts: " + str(mtract))
+	
+	return finalcounties, finaltracts
+
+def LoadPLACES(tmode):
+
+	# load counties
+	includeCols = ["ACCESS2_CrudePrev","ARTHRITIS_CrudePrev","BINGE_CrudePrev","BPHIGH_CrudePrev","BPMED_CrudePrev","CANCER_CrudePrev","CASTHMA_CrudePrev","CERVICAL_CrudePrev","CHD_CrudePrev","CHECKUP_CrudePrev","CHOLSCREEN_CrudePrev","COLON_SCREEN_CrudePrev","COPD_CrudePrev","COREM_CrudePrev","COREW_CrudePrev","CSMOKING_CrudePrev","DENTAL_CrudePrev","DEPRESSION_CrudePrev","DIABETES_CrudePrev","GHLTH_CrudePrev","HIGHCHOL_CrudePrev","KIDNEY_CrudePrev","LPA_CrudePrev","MAMMOUSE_CrudePrev","MHLTH_CrudePrev","OBESITY_CrudePrev","PHLTH_CrudePrev","SLEEP_CrudePrev","STROKE_CrudePrev","TEETHLOST_CrudePrev"]
+
+	cdcdata = defaultdict(lambda: defaultdict(str))
+	#bpath = "c:\\Apache24\\htdocs\\bphc\\data"
+	bpath = ""
+	popdata = defaultdict(int)
+	rowcnt = 0
+	
+	tfile = "PLACES__County_Data__GIS_Friendly_Format___2021_release.tsv"
+	tsep = "\t"
+	tcol = "CountyFIPS"
+	if tmode == "tract":
+		tfile = "PLACES__Census_Tract_Data__GIS_Friendly_Format___2021_release.csv"
+		tsep = ","
+		tcol = "TractFIPS"
+	
+	#print("Loading " + tfile)
+	tplaces = pd.read_table(tfile, delimiter=tsep, dtype=str)
+	tplaces = tplaces.set_index(tcol)
+	#tplaces.index = tplaces.index.map(str)
+	tindex = tplaces.index
+	tplaces[includeCols] = tplaces[includeCols].apply(pd.to_numeric)
+	# check to see if fips is 5 digits
+	fipscodes = tplaces.index
+	for x in range(0, len(fipscodes)):
+	
+		tindex = tplaces.index[x]
+		
+		if tmode == "county":
+			if len(str(tindex)) == 4:
+				nindex = "0" + tindex
+				#print("Renaming " + tindex + " to " + nindex)
+				tplaces = tplaces.rename(index={tindex: nindex})
+
+		if tmode == "tract":
+			if len(str(tindex)) == 10:
+				#print("Padding zero: " + tindex)
+				nindex = "0" + tindex
+				#print("Renaming " + tindex + " to " + nindex)
+				tplaces = tplaces.rename(index={tindex: nindex})
+				
+		#if ((x % 100) == 0):
+		#	print(str(x) + ". Index: " + tindex)
+
+	tfinal = tplaces[includeCols]
+	#print("LoadPLACES:")
+	#print(tfinal)
+
+	return tfinal
+
+def LoadEPAData(tmode):
+
+	# get file
+	tfile = "EJSCREEN_2021_USPR_Tracts.csv"
+	
+	# load into dataframe
+	# https://www.epa.gov/ejscreen/overview-environmental-indicators-ejscreen
+	
+	#6	REGION	US EPA Region number
+	#7	ACSTOTPOP	Total population
+	#8	MINORPCT	% people of color
+	#9	LOWINCPCT	% low income
+	#10	LESSHSPCT	% less than high school education
+	#11	LINGISOPCT	% linguistically isolated
+	#12	UNDER5PCT	% under age 5
+	#13	OVER64PCT	% over age 64
+	#14	PRE1960PCT	Lead paint
+	#15	UNEMPPCT	Unemployment rate
+	#16	VULEOPCT	Demographic Index
+	#17	DSLPM	2017 Diesel particulate matter
+	#18	CANCER	2017 Air toxics cancer risk
+	#19	RESP	2017 Air toxics respiratory HI
+	#20	PTRAF	Traffic proximity
+	#21	PWDIS	Wastewater discharge
+	#22	PNPL	Superfund proximity
+	#23	PRMP	RMP facility proximity
+	#24	PTSDF	Hazardous waste proximity
+	#25	OZONE	Ozone
+	#26	PM25	Particulate Matter 2.5
+	#27	UST	Underground storage tanks
+	
+	#collist = ['ACSTOTPOP', "CANCER", "DSLPM", "RESP", "PTRAF", "PWDIS", "PNPL", "PRMP", "PTSDF", "OZONE", "PM25", "UST", "PRE1960PCT", "MINORPCT", "LOWINCPCT", "LESSHSPCT", "LINGISOPCT", "UNDER5PCT", "OVER64PCT", "UNEMPPCT"]
+	collist = ['ACSTOTPOP', "MINORPCT", "LOWINCPCT", "LESSHSPCT", "LINGISOPCT", "UNDER5PCT", "OVER64PCT", "UNEMPPCT", \
+	"PRE1960PCT", "DSLPM", "CANCER", "RESP", "PTRAF", "PWDIS", "PNPL", "PRMP", "PTSDF", "OZONE", "PM25", "UST"]
+	
+	collist_final = []
+	for tid in collist:
+		if tid != "CANCER":
+			collist_final.append(tid)
+		if tid == "CANCER":
+			collist_final.append("CANCER_AIR")
+	
+	#including PTRAF or PWDIS removes the clusters
+	raw_data = pd.read_csv(tfile, header=0, low_memory=False)
+	raw_data.set_index("ID", inplace=True)
+	raw_data = raw_data[collist]
+	
+	# average county data
+	ttable = []
+	tempCountyData = defaultdict(lambda: defaultdict(float))
+	tempTractData = defaultdict(lambda: defaultdict(float))
+	county_data = pd.DataFrame()	
+	countytotal = defaultdict(float)
+	tractdata = defaultdict(float)
+
+	# get county pop totals for weights
+	for x in range(0, len(raw_data.index)):
+		tfips = str(raw_data.index[x])
+		nfips = str(tfips)
+		if len(nfips) == 10:
+			nfips = "0" + nfips
+		tcounty = nfips[0:5]
+		countytotal[tcounty] += raw_data.loc[raw_data.index[x], "ACSTOTPOP"]
+	
+	for x in range(0, len(raw_data.index)):
+		tfips = raw_data.index[x]
+		nfips = str(tfips)
+		if len(nfips) == 10:
+			nfips = "0" + nfips
+		tcounty = str(nfips)[0:5]
+		tstate = str(nfips)[0:2]
+		# ignore protectorates
+		if int(tstate) < 60:
+			weight = raw_data.loc[raw_data.index[x], "ACSTOTPOP"] / countytotal[tcounty]
+			for tcol in collist:
+				ncol = tcol
+				if ncol == "CANCER":
+					ncol = "CANCER_AIR"
+				if tmode == "county":
+					tempCountyData[tcounty][ncol] += raw_data.loc[tfips, tcol] * weight
+				if tmode == "tract":
+					tempCountyData[nfips][ncol] += raw_data.loc[tfips, tcol]
+
+	for tfips in tempCountyData:
+		trow = [tfips]
+		for tcol in collist:
+			ncol = tcol
+			if ncol == "CANCER":
+				ncol = "CANCER_AIR"
+			trow.append(tempCountyData[tfips][ncol])
+		ttable.append(trow)
+
+	clist = ["fips"] + collist_final
+	epa_data = pd.DataFrame(ttable, columns=clist)
+	epa_data.set_index("fips", inplace=True)
+	epa_data[collist_final] = epa_data[collist_final].apply(pd.to_numeric)
+	epa_data = epa_data.replace(np.nan, 0)
+	epa_data = epa_data.drop("ACSTOTPOP", axis=1)
+	
+	#print(epa_data)
+
+	return epa_data
+
+def LoadChemicalData(tmode):
+
+	if tmode == "county":
+		chemdata_county = pd.read_csv("2018_Toxics_Ambient_Concentrations.updated.county.tsv", header=0, index_col=0, sep="\t", low_memory=False)
+		tindex = []
+		for tid in chemdata_county.index:
+			nid = str(tid)
+			if len(nid) == 4:
+				nid = "0" + nid
+			tindex.append(nid)
+		chemdata_county.index = tindex
+		
+		return chemdata_county
+
+	if tmode == "tract":
+		chemdata_tract = pd.read_csv("2018_Toxics_Ambient_Concentrations.updated.tract.tsv", header=0, index_col=0, sep="\t")
+		tindex = []
+		for tid in chemdata_tract.index:
+			nid = str(tid)
+			if len(nid) == 10:
+				nid = "0" + nid
+			tindex.append(nid)
+		chemdata_tract.index = tindex
+		
+		return chemdata_tract
+
+
+def CalcFisherPVal(list1, list2, overlap, popsize):
+	
+	a = popsize - list1 - list2 + overlap
+	b = list2 - overlap
+	c = list1 - overlap
+	d = overlap
+
+	odds_ratio = 1
+	p_value = 1
+	if (a > 0) and (b > 0) and (c > 0) and (d > 0):
+		data = [[a, b], [c, d]]	  
+		odd_ratio, p_value = stats.fisher_exact(data)
+	
+	return p_value	
+
+def GetCanonicalStrokeBelt(tmode, countylist, tractlist):
+
+	# Download from here for 2017-2019 using Stroke mortality, and use the export function
+	# Texas: 48
+	# Florida: 12
+	strokebelt_states = ["01", "05", "13", "18", "21", "22", "28", "37", "45", "47", "51"]
+	
+	tcnt = 0
+	#tcutoff = 70.6
+	tcutoff = 78
+	tfile = "cdc_stroke_mort_2017_2019.csv"
+	beltlist = defaultdict(float)
+	with open(tfile, "r") as infile:
+		csv_reader = csv.reader(infile, delimiter=",")
+		for row in csv_reader:
+			if tcnt == 0:
+				theader = row
+			if tcnt > 0:
+				for row in csv_reader:
+					tfips = row[0]
+					if len(tfips) == 4:
+						tfips = "0" + tfips
+					tstate = tfips[0:2]
+					
+					inState = 1
+					if tmode == "canonical":
+						if tstate not in strokebelt_states:
+							inState = 0
+					
+					if inState == 1:
+						tvalue = 0
+						if (row[2] == "") or (row[2] == "-1"):
+							tvalue = 0
+						else:
+							tvalue = float(row[2])
+						if tvalue > tcutoff:
+							beltlist[tfips] = tvalue
+			tcnt += 1
+	infile.close()
+	
+	# now compare beltlist to counties, tracts
+	county_belt = defaultdict(str)
+	tract_belt = defaultdict(str)
+	for tfips in beltlist:
+		county_belt[tfips] = "1"
+	for tfips in tractlist:
+		tcounty = tfips[0:5]
+		if tcounty in beltlist:
+			tract_belt[tfips] = "1"
+		
+	return county_belt, tract_belt
+
+def LoadClusterData(tfile):
+
+	numlines = 0
+	clusterdata = defaultdict(str)
+	with open(tfile, "r") as infile:
+		theader = infile.readline()
+		for line in infile:
+			line = line.strip()
+			ldata = line.split("\t")
+			tfips = ldata[0]
+			tclust = ldata[1]
+			clusterdata[tfips] = tclust
+			numlines += 1
+	infile.close()
+	
+	print("Loaded: " + str(numlines))
+
+	return clusterdata
+
+def CalcFastJaccard(clustdata, countybelt, totalcnt):
+
+	# Jaccard = intersection / union
+	jaccard_clust = defaultdict(str)
+	list2cnt = 0
+	for tid in countybelt:
+		list2cnt += 1
+
+	# get list of clusters, counts
+	clustlist = defaultdict(int)
+	tintersect_table = defaultdict(int)
+	tunion_table = defaultdict(int)
+	list1cnt_table = defaultdict(int)
+	clustlist_table = defaultdict(str)
+	curr_clustdata = defaultdict(lambda: defaultdict(int))
+	unionlist_table = defaultdict(lambda: defaultdict(int))
+
+	# get cluster data
+	for tfips in clustdata:
+		tclust = clustdata[tfips]
+		clustlist[tclust] = 1
+		curr_clustdata[tclust][tfips] = 1
+		list1cnt_table[tclust] += 1
+		unionlist_table[tclust][tfips] = 1
+		tunion_table[tclust] += 1
+		if tfips in countybelt:
+			tintersect_table[tclust] += 1
+
+	# calculate jaccard / p-value for each cluster
+	max_jaccard = 0
+	pval_max = 1
+	for tclust in clustlist:
+		
+		# get union
+		for tfips in countybelt:
+			if unionlist_table[tclust][tfips] != 1:
+				tunion_table[tclust] += 1
+
+		# calc p-value
+		pval = CalcFisherPVal(list1cnt_table[tclust], list2cnt, tintersect_table[tclust], totalcnt)		
+
+		# calculate Jaccard
+		tjaccard = tintersect_table[tclust] / tunion_table[tclust]
+		jaccard_clust[tclust] = str(tjaccard)
+                #print("Cluster: " + clustnum + "\t" + str(tjaccard))
+		if tjaccard > max_jaccard:
+			max_jaccard = tjaccard
+			pval_max = pval
+	
+	return max_jaccard, pval_max
+
 
 def LoadMapJSON(tmode):
 
@@ -132,54 +528,11 @@ def RunPCA(pcadata, tfile, ttitle):
 	pcadata = pcadata.replace(np.nan, 0)
 	
 	Xt = pca.fit_transform(pcadata)
-	#loadings = pca.components_
-	#loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
-	
 	# print PC variance explained
 	exp_var_pca = pca.explained_variance_ratio_
 	plt.close()
-	#plt.bar(range(0,len(exp_var_pca)), exp_var_pca, alpha=0.5, align='center', label='Individual explained variance')
-	#plt.savefig(tfile + ".variance.pdf")
-	#plt.close()
-	
-	# print loadings
-	#loadings = pca.components_.T * np.sqrt(pca.explained_variance_)
-	#loading_matrix = pd.DataFrame(loadings, columns=['PC1', 'PC2'], index=pcadata.columns)
-	#print(loading_matrix)
 
-	#plt.rcParams["axes.grid"] = False	
-	#plt.rcParams["figure.figsize"] = (8,8)
-
-	#fig, ax = plt.subplots()
-	#ax.patch.set_edgecolor('black')  
-	#ax.patch.set_linewidth('1')
-	#ax.set_facecolor("#FFF")
-	#ax.scatter(Xt[:,0], Xt[:,1])
-	#ax.set_xlabel("Principal Component 1")
-	#ax.set_ylabel("Principal Component 2")
-	#ax.set_title(ttitle)
-	#plt.show()
 	dropdata = []
-	
-	#plt.savefig(tfile)
-	#plt.show()
-	plt.close()
-
-	# count number of clusters
-	#wcss = []
-	#for i in range(1, 21):
-	#	kmeans_pca = KMeans(n_clusters = i)
-	#	kmeans_pca.fit(Xt)
-	#	wcss.append(kmeans_pca.inertia_)
-		
-	#plt.figure(figsize=(10,8))
-	#plt.plot(range(1,21), wcss, marker='o', linestyle='--')
-	#plt.title(ttitle + " WCSS Number of Clusters")
-	#plt.xlabel('Number of Clusters')
-	#plt.ylabel('Kmeans with PCA Clustering')
-	#plt.savefig(tfile + ".numclust.pdf")
-	#plt.show()
-	#plt.close()
 
 	return Xt
 
@@ -197,10 +550,6 @@ def PCA_Kmeans(Xt_pca, numclust, pcadata, pcafile, clustfile, clust_tsv):
 		colorlist.append(cluster_colors[labels[x]])
 	
 	plt.close()
-	#plt.scatter(PCA_components[0], PCA_components[1], c=colorlist)
-	#plt.xlabel("PC1")
-	#plt.ylabel("PC2")
-	#plt.title("SDI -Means Clustered PCA (k=" + str(numclust) + ")")
 	covidtable = []
 	covidindex = []
 	clustertable = []
@@ -220,19 +569,10 @@ def PCA_Kmeans(Xt_pca, numclust, pcadata, pcafile, clustfile, clust_tsv):
 		tclust.append(labels[i])			
 		clustertable.append(tclust)
 			
-	#plt.savefig(pcafile)
-	#plt.close()
-	
 	clusterframe = pd.DataFrame(clustertable, columns=["county", "cluster"])
 	clusterframe = clusterframe.set_index("county")
 	clusterframe.to_csv(clust_tsv, sep="\t")
 
-	# now do a violin plot of COVID-19 rates for each k-means cluster
-	#https://stackoverflow.com/questions/64785394/seaborn-violin-plot-for-single-column-splitting-by-a-categorical-column
-
-	#fig.show()
-	#fig.savefig(clustfile)
-	
 	return clusterframe
 
 def ShowBinaryMap(beltlist, mapfile, json_data, backcolor, forecolor):
@@ -255,14 +595,9 @@ def ShowBinaryMap(beltlist, mapfile, json_data, backcolor, forecolor):
 				#print(tfips + "\t" + str(get_color))
 				ax.add_patch(PolygonPatch(poly, fc=get_color, ec=get_color, alpha=1, zorder=2))
 	
-	#ax.axis('scaled')
-	#ax.set_xlim(-180, -60)
-	#ax.set_ylim(20, 80)
 	ax.set_xlim(-130, -60)
 	ax.set_ylim(23, 50)
 	ax.set_facecolor('xkcd:white')
-	#plt.xlabel("Longitude")
-	#plt.ylabel("Latitude")
 
 	fig.tight_layout()
 	plt.axis("off")
@@ -282,14 +617,7 @@ def ShowClustersOnMap(tmode, datatable, numclust, tfile, json_data):
 	datatable = datatable.replace(np.nan, 0)
 	Xt_epa = RunPCA(datatable, pcafile, tfile)
 	epa_clust = PCA_Kmeans(Xt_epa, numclust, datatable, kfile, cluster_file, cluster_tsv)
-	
-	#print("Clusters:")
-	#print(epa_clust)
 	epa_clust.to_csv(cluster_tsv, sep="\t")
-
-	# set colors
-	#tcolors = ["#ff0000", "#00ff00", "#0000ff", "#6a0dad", "#ffff00"]	
-	#tcolors = ["red", "green", "blue", "purple", "yellow", "violet", "orange"]
 
 	plt.close()
 	plt.axis("off")
@@ -361,185 +689,8 @@ def ShowClustersOnMap(tmode, datatable, numclust, tfile, json_data):
 	fig.tight_layout()
 	plt.savefig(mapfile, dpi=1200)
 
-def LoadPollutionData():
+	return cluster_tsv
 
-	tcnt = 0
-	ttable = []
-	with open("2018_Toxics_Ambient_Concentrations.txt", encoding="latin-1") as infile:
-		for line in infile:
-			
-			line = line.strip()
-			ldata = line.split("\t")
-			
-			if tcnt == 0:
-				theader = []
-				for x in range(5, len(ldata)):
-					ldata[x] = ldata[x].replace("-", "_")
-					ldata[x] = ldata[x].replace(",", "_")
-					ldata[x] = ldata[x].replace(" ", "_")
-					ldata[x] = ldata[x].replace("'", "_")
-					ldata[x] = ldata[x].replace("\"", "")
-					ldata[x] = ldata[x].replace("(", "_")
-					ldata[x] = ldata[x].replace(")", "_")
-					ldata[x] = ldata[x].replace("[", "_")
-					ldata[x] = ldata[x].replace("]", "_")
-					ldata[x] = ldata[x].replace("__", "_")
-					
-					if ldata[x][-1] == "_":
-						ldata[x] = ldata[x][:-1]
-					
-					theader.append(ldata[x])
-				
-			if tcnt > 0:
-				trow = []
-				tdesc = ldata[2]
-				if tdesc.find("Entire") == -1:
-					#print("Description: " + tdesc)
-					trow = [ldata[4]]
-					for x in range(5, len(ldata)):
-						trow.append(ldata[x])
-					ttable.append(trow)
-					#print(str(trow))
-					
-			tcnt += 1
-				
-	infile.close()
-
-	#workbook = openpyxl.load_workbook("2018_Toxics_Ambient_Concentrations.xlsx")
-	#worksheet = workbook.active
-	
-	#ttable = []
-	#theader = []
-	#for trow in range(1, worksheet.max_row + 1):
-	
-	#	rowdata = []
-	#	if trow == 1:
-	#		for tcol in range(6, worksheet.max_column + 1):
-	#			tval = worksheet.cell(1, tcol).value
-	#			#print("Header column: " + tval)
-	#			theader.append(tval)
-	#		
-	#	if trow > 1:
-	#		tdesc = worksheet.cell(trow, 3).value
-	#		tfips = worksheet.cell(trow, 5).value
-	#		rowdata.append(tfips)
-	#		if tdesc.find("Entire") == -1:
-	#			for tcol in range(6, worksheet.max_column + 1):
-	#				nvalue = worksheet.cell(trow, tcol).value
-	#				rowdata.append(nvalue)
-	#			ttable.append(rowdata)
-	#	
-	#	if ((trow % 1000) == 0):
-	#		print("Number of rows: " + str(trow))
-
-	clist = ["fips"] + theader
-	chemdata = pd.DataFrame(ttable, columns=clist)
-	chemdata.set_index("fips", inplace=True)
-	chemdata[theader] = chemdata[theader].apply(pd.to_numeric)
-	chemdata = chemdata.replace(np.nan, 0)
-	
-	print(chemdata)
-
-	return chemdata
-			
-def ShowCorrelations(corrmat, tfile):
-
-	corrmat = chemdata.corr()
-	sns.set(font_scale=0.2)
-	cg = sns.clustermap(corrmat, cmap ="YlGnBu", linewidths = 0.1)
-	cg.savefig(tfile, dpi=1200)
-
-def PlotPairwiseMultiMaps(datalist, tmode, basedata, tbase, json_data):
-
-	tcnt = 0
-	filelist = []
-	missing_chem = ['1_BROMOPROPANE', '1_1_DIMETHYLHYDRAZINE', '1_1_2_TRICHLOROETHANE', '1_1_2_2_TETRACHLOROETHANE']
-	for x in range(0, len(datalist)):
-		for y in range(x, len(datalist)):
-			if (datalist[x] != datalist[y]):
-				#print(str(tcnt) + "\t" + "Pair: " + datalist[x] + "," + datalist[y])
-				tpair = [datalist[x], datalist[y]]
-				tdata = basedata[tpair]
-				ttag = datalist[x] + "-" + datalist[y]
-				flist = []
-				for tclust in range(2, 5):
-					tfile = tbase + "." + ttag + "." + str(tclust) + ".pdf"
-					#ShowClustersOnMap(tmode, tdata, tclust, tfile, json_data)
-					# make filenames
-					bpath = "data"
-					pcafile = bpath + "//" + tfile + ".pca.pdf"
-					kfile = bpath + "//" + tfile + ".kmeans.pca.pdf"
-					cluster_file = bpath + "//" + tfile + ".kmeans.pca.clusters.pdf"
-					cluster_tsv = bpath + "//" + tfile + "." + str(tclust) + ".cluster.tsv"
-					mapfile = bpath + "//" + tfile + ".map.jpg"
-				
-					# PCA
-					#tdata = tdata.replace(np.nan, 0)
-					#Xt_epa = RunPCA(tdata, pcafile, tfile)
-					#epa_clust = PCA_Kmeans(Xt_epa, tclust, tdata, kfile, cluster_file)
-					#epa_clust.to_csv(cluster_tsv, sep="\t")
-					#if not os.path.isfile(cluster_tsv):
-					if datalist[x] in missing_chem:
-						print("File - " + cluster_tsv)
-						ShowClustersOnMap("county", tdata, tclust, tfile, json_data)
-
-					flist.append(tfile + ".map.jpg")
-
-				tcnt += 1
-				
-				filelist.append(flist)
-
-def PlotMultiMaps(datalist, tmode, basedata, tbase, json_data):
-
-	tcnt = 0
-	filelist = []
-	for x in range(0, len(datalist)):
-		for y in range(x+1, len(datalist)):
-			print("Pair: " + datalist[x] + "," + datalist[y])
-			tpair = [datalist[x], datalist[y]]
-			tdata = basedata[tpair]
-			ttag = datalist[x] + "-" + datalist[y]
-			flist = []
-			for tclust in range(2, 6):
-				tfile = tbase + "." + ttag + "." + str(tclust) + ".pdf"
-				ShowClustersOnMap(tmode, tdata, tclust, tfile, json_data)
-				flist.append(tfile + ".map.jpg")
-			filelist.append(flist)
-	
-	# transpose table using zip
-	ttable = [list(i) for i in zip(*filelist)]
-
-	# get header
-	headerlist = []
-	for tcol in range(0, len(ttable[0])):
-		tdata = ttable[0][tcol].split('.')
-		tdata2 = tdata[1].split('-')
-		tval1 = tdata2[0]
-		tval2 = tdata2[1]
-		nheader = tval1 + ',<br>' + tval2
-		headerlist.append(nheader)
-
-	tHTML = "<html>\n<body style=\"font-family: arial; font-size: 10px;\">\n<table style=\"width: 100%;\">\n"
-	f = open(tbase + ".html", "w")
-	tline = "\t<tr>\n\t\t<td></td>\n"
-	for theader in headerlist:
-		nheader = theader.replace('_', ' ')
-		tline += "\t\t<td><font style=\"font-size: 9px;\">" + nheader + "</font></td>\n"
-	tline += "\t<tr>\n"
-	tHTML += tline
-	
-	clustnum = 2
-	for trow in range(0, len(ttable)):
-		tline = "\t<tr>\n"
-		tline += "\t\t<td><font style=\"font-size: 14px\">" + str(clustnum) + "</font></td>"
-		for tcol in range(0, len(ttable[trow])):
-			tline += "\t\t<td><img src=\"" + ttable[trow][tcol] + "\" style=\"width: 100px;\"></td>\n"
-		tline += "\t</tr>\n"
-		clustnum += 1
-		tHTML += tline
-	tHTML += "</table>\n</body>\n</html>"
-	f.write(tHTML)
-	f.close()
 
 #########################
 ### Run main analysis ###
@@ -569,23 +720,19 @@ def PlotMultiMaps(datalist, tmode, basedata, tbase, json_data):
 ####################
 ### Main Program ###
 ####################
-popdata = GetPopData()
-chemdata = LoadPollutionData()
+chemdata_tract = LoadChemicalData("tract")
+chemdata_county = LoadChemicalData("county")
+finalcounties, finaltracts = GetMainLists()
 
-# now get county data
-ofile = "2018_Toxics_Ambient_Concentrations.tract.tsv"
-chemdata.to_csv(ofile, sep="\t")
-cfile = GetCountyData(popdata, ofile)
-chemdata_county = pd.read_csv(cfile, header=0, index_col=0, sep="\t")
+# use the controlled list of counties and tracts
+chemdata_tract = chemdata_tract[chemdata_tract.index.isin(finaltracts)]
+chemdata_county = chemdata_county[chemdata_county.index.isin(finalcounties)]
 
-# Individual chemicals can be selected and clustered:
-#tract_list = ["METHANOL", "BENZOAPYRENE", "CRESOL_CRESYLIC_ACID_MIXED_ISOMERS", "ETHYLENE_GLYCOL", "4_AMINOBIPHENYL"]
-#county_list = ["METHANOL", "ACETALDEHYDE", "ACROLEIN", "ACETONITRILE", "DIESEL_PM"]
-#chemtract = chemdata[tract_list]
-#chemcounty = chemdata_county[county_list]
-
-chemtract = chemdata
-chemcounty = chemdata_county
+# print out data
+print("Number of counties in airtoxscreendata: " + str(len(chemdata_county.index)))
+print("Number of tracts in airtoxscreendata: " + str(len(chemdata_tract.index)))
+print("Number of county columns in airtoxscreendata: " + str(len(chemdata_county.columns)))
+print("Number of tract columns in airtoxscreendata: " + str(len(chemdata_tract.columns)))
 
 # get map data
 county_json = LoadMapJSON("county")
@@ -593,18 +740,51 @@ tract_json = LoadMapJSON("tract")
 
 # show maps for different clustering
 lowclust = 2
-hiclust = 5
+hiclust = 6
 
+filelist = []
 for numclust in range(lowclust, hiclust):
 
-	# Make a census-tract level map using the ShowClustersOnMap function - maps are saved in PNG format
-	# parameter 1: mode (tract/cluster)
-	# parameter 2: pollution data (pandas dataframe)
-	# parameter 3: filename
-	# parameter 4: json map data
-	ShowClustersOnMap("tract", chemtract, numclust, "apeer_tract." + str(x), tract_json)
+	print("Completing clustering for k=" + str(numclust))
+	tfile = ShowClustersOnMap("tract", chemdata_tract, numclust, "apeer_tract." + str(numclust), tract_json)
+	filelist.append(tfile)
+	tfile = ShowClustersOnMap("county", chemdata_county, numclust, "apeer_county." + str(numclust), county_json)
+	filelist.append(tfile)
 
-	# Make a county-level map using the ShowClustersOnMap function
-	ShowClustersOnMap("county", chemcounty, numclust, "apeer_county." + str(x), county_json)
+# count up tracts / counties for Jaccard
+countycnt = 0
+for tfips in finalcounties:
+	countycnt += 1
+tractcnt = 0
+for tfips in finaltracts:
+	tractcnt += 1
 
+print("All Counties: " + str(countycnt) + " All Tracts: " + str(tractcnt))
 
+countymort, tractmort = GetCanonicalStrokeBelt("all", finalcounties, finaltracts)
+
+# check cluster counts
+for tfile in filelist:
+	stats_data = defaultdict(int)
+	print("Calculating cluster file: " + tfile)
+	clustdata = LoadClusterData(tfile)
+	for tid in clustdata:
+		tclust = clustdata[tid]
+		stats_data[tclust] += 1
+	for tid in stats_data:
+		print(str(tid) + "\t" + str(stats_data[tid]))
+
+# Jaccard indices are stored in apeer_jaccard.tsv
+ofile = "apeer_jaccard.tsv"
+chronic_disease = defaultdict(lambda: defaultdict(float))
+f = open(ofile, "w")
+for tfile in filelist:
+	print("Calculating Jaccard Indices for " + tfile)
+	clustdata = LoadClusterData(tfile)
+	if tfile.find('county') > -1:
+		tjaccard, tpval = CalcFastJaccard(clustdata, countymort, countycnt)
+	if tfile.find('tract') > -1:
+		tjaccard, tpval = CalcFastJaccard(clustdata, tractmort, tractcnt)
+	print(tfile + "\t" + str(tjaccard) + "\t" + str(tpval))
+	f.write(tfile + "\t" + str(tjaccard) + "\t" + str(tpval) + "\n")
+f.close()
