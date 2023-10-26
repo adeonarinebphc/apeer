@@ -726,6 +726,12 @@ def ShowClustersOnMap(tmode, datatable, numclust, tfile, json_data):
 # 2018_Toxics_Ambient_Concentrations.updated.county.tsv
 # https://drive.google.com/file/d/1KnHRpmv2Z_ee6nDfN-agO95qdmit20Mx/view?usp=sharing
 
+# GeoJSON File - Tracts:
+# https://drive.google.com/file/d/1v0uOkMNQJDr1F2UxN_pUbvcafLw2GqAw/view?usp=sharing
+
+# GeoJSON File - Counties:
+# https://drive.google.com/file/d/1T1djNPuDqTkSlD2kRyhHw3coxuBjgLpx/view?usp=sharing
+
 # STEP 3: now run the script using the command:
 # python3 apeer.py
 
